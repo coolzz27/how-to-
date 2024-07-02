@@ -6,13 +6,19 @@ Offline servers, like mini PCs on robots, may have no access to the Internet, le
 
 ## Solution
 
-1. SSH to the server and install `ntpdate`. If the server has no Internet access, we can use an Android phone and a USB cable to share the Internet connection with the server (search for "USB网络共享" or "USB tethering" in phone settings).
+1. Copy public key to the server to enable passwordless SSH login.
+
+    ```bash
+    ssh-copy-id user@hostname
+    ```
+
+2. SSH to the server and install `ntpdate`. If the server has no Internet access, we can use an Android phone and a USB cable to share the Internet connection with the server (search for "USB网络共享" or "USB tethering" in phone settings).
 
     ```bash
     sudo apt-get install ntpdate
     ```
 
-2. Edit sudoers file on the server to allow running `date` command without password.
+3. Edit sudoers file on the server to allow running `date` command without password.
 
     ```bash
     sudo visudo
@@ -24,7 +30,7 @@ Offline servers, like mini PCs on robots, may have no access to the Internet, le
     username ALL=(ALL) NOPASSWD: /bin/date
     ```
 
-3. Log out from the server. Create a script to sync time when SSHing into the server and save it as `sync_time.sh`.
+4. Log out from the server. Create a script to sync time when SSHing into the server and save it as `sync_time.sh`.
 
     ```bash
     #!/bin/bash
@@ -38,6 +44,13 @@ Offline servers, like mini PCs on robots, may have no access to the Internet, le
     current_time=$(date -u +'%Y-%m-%d %H:%M:%S')
     temp_file="/tmp/sync_time_flag"
 
+    cleanup() {
+        rm -f "$temp_file"
+    }
+
+    # Set trap to clean up the temporary file on EXIT
+    trap cleanup EXIT
+
     # Prevent recursive execution
     if [ -f "$temp_file" ]; then
         exit 0
@@ -48,16 +61,21 @@ Offline servers, like mini PCs on robots, may have no access to the Internet, le
 
     ssh -o StrictHostKeyChecking=no "$server" "sudo date -s '$current_time'"
 
-    rm -f "$temp_file"
+    if [ $? -eq 0 ]; then
+        echo "Time successfully synchronized with $server"
+    else
+        echo "Failed to synchronize time with $server"
+    fi
+
     ```
 
-4. Make the script executable.
+5. Make the script executable.
 
     ```bash
     chmod +x sync_time.sh
     ```
 
-5. Configure ~/.ssh/config to run the script when we ssh into the server.
+6. Configure ~/.ssh/config to run the script when we ssh into the server.
 
     ```bash
     Host *
